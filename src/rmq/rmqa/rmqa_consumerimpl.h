@@ -36,6 +36,7 @@
 #include <bsl_functional.h>
 #include <bsl_memory.h>
 #include <bsl_string.h>
+#include <bsl_unordered_map.h>
 #include <bsl_vector.h>
 
 //@PURPOSE: Provide a RabbitMQ Async Consumer API
@@ -137,7 +138,8 @@ class ConsumerImpl : public rmqp::Consumer,
 
     bsl::shared_ptr<rmqamqp::ReceiveChannel> d_channel;
     bsl::shared_ptr<MessageGuard::Factory> d_guardFactory;
-    bsl::vector<bsl::shared_ptr<rmqp::MessageTransformer> > d_transformers;
+    bsl::unordered_map<bsl::string, bsl::shared_ptr<rmqp::MessageTransformer> >
+        d_transformers;
 
     bsl::function<void()> d_onNewAckBatch;
     bsl::function<void(const rmqt::ConsumerAck&)> d_messageGuardCb;

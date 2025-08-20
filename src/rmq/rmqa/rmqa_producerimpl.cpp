@@ -211,6 +211,8 @@ bool ProducerImpl::applyTransformations(rmqt::Message& dstMessage,
         props.headers = bsl::make_shared<rmqt::FieldTable>();
     }
 
+    bsl::string appliedTransformers;
+
     // Apply all transformations
     for (bsl::vector<bsl::shared_ptr<rmqp::MessageTransformer> >::iterator it =
              d_transformers.begin();
@@ -231,10 +233,16 @@ bool ProducerImpl::applyTransformations(rmqt::Message& dstMessage,
                                << (*it)->name() << "' already exists";
                 return false;
             }
+            appliedTransformers += "," + (*it)->name();
         }
         else {
             BALL_LOG_DEBUG << "Transformation " << (*it)->name() << " ignored";
         }
+    }
+
+    if (appliedTransformers.size() > 0) {
+        props.headers->emplace("sdk.transform",
+                               rmqt::FieldValue(appliedTransformers.substr(1)));
     }
 
     // Pack into destination message

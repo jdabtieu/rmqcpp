@@ -32,6 +32,7 @@
 #include <bdlf_bind.h>
 #include <bsl_memory.h>
 #include <bsl_string.h>
+#include <bsl_unordered_map.h>
 #include <bsl_vector.h>
 #include <bslmt_lockguard.h>
 #include <bslmt_mutex.h>
@@ -88,12 +89,14 @@ ConsumerImpl::ConsumerImpl(
 , d_ackMessageMutex()
 , d_channel(channel)
 , d_guardFactory(guardFactory)
-, d_transformers(transformers)
 , d_onNewAckBatch(
       bdlf::BindUtil::bind(&rmqamqp::ReceiveChannel::consumeAckBatchFromQueue,
                            d_channel))
 , d_messageGuardCb()
 {
+    for (size_t i = 0; i < transformers.size(); ++i) {
+        d_transformers[transformers[i]->name()] = transformers[i];
+    }
 }
 
 ConsumerImpl::~ConsumerImpl()
@@ -200,27 +203,54 @@ bool ConsumerImpl::unpackTransformations(rmqt::Message& dstMessage,
                                                     srcMessage.payloadSize());
     rmqt::Properties properties = srcMessage.properties();
 
-    // Undo all transformations
-    for (bsl::vector<
-             bsl::shared_ptr<rmqp::MessageTransformer> >::reverse_iterator it =
-             d_transformers.rbegin();
-         it != d_transformers.rend();
-         ++it) {
-        bsl::string headerName = "sdk.transform." + (*it)->name();
-        if (!properties.headers ||
-            properties.headers->find(headerName) == properties.headers->end()) {
-            BALL_LOG_DEBUG << "No transformation header found for "
-                           << (*it)->name();
-            continue; // No transformation header, skip
+    if (!properties.headers || properties.headers->find("sdk.transform") ==
+                                   properties.headers->end()) {
+        dstMessage = srcMessage; // No transformations, just copy
+        return true;
+    }
+
+    bsl::string transformHeader =
+        (*properties.headers)["sdk.transform"].the<bsl::string>();
+
+    while (!transformHeader.empty()) {
+        size_t pos = transformHeader.rfind(',');
+        bsl::string transformerName;
+        if (pos == bsl::string::npos) {
+            transformerName = transformHeader;
+            transformHeader.clear(); // No more transformations
         }
-        rmqt::Result<> r = (*it)->inverseTransform(rawData, properties);
+        else {
+            transformerName = transformHeader.substr(pos + 1);
+            transformHeader.erase(pos); // Remove processed transformation
+        }
+
+        if (properties.headers->find(transformerName) ==
+            properties.headers->end()) {
+            BALL_LOG_ERROR << transformerName
+                           << " is listed as a message transformation but its "
+                              "header is missing";
+            return false;
+        }
+
+        if (d_transformers.find(transformerName) == d_transformers.end()) {
+            BALL_LOG_ERROR << "Unknown transformer: " << transformerName;
+            return false;
+        }
+
+        bsl::shared_ptr<rmqp::MessageTransformer> transformer =
+            d_transformers[transformerName];
+
+        rmqt::Result<> r = transformer->inverseTransform(rawData, properties);
         if (!r) {
-            BALL_LOG_ERROR << "Inverse transformation " << (*it)->name()
+            BALL_LOG_ERROR << "Inverse transformation " << transformerName
                            << " failed: " << r.error();
             return false;
         }
-        properties.headers->erase(headerName); // Remove transformation header
+        properties.headers->erase(
+            transformerName); // Remove transformation header
     }
+
+    properties.headers->erase("sdk.transform");
 
     // Pack into destination message
     dstMessage = rmqt::Message(rawData, properties);
@@ -241,11 +271,13 @@ void ConsumerImpl::threadPoolHandleMessage(
     }
 
     rmqt::Message untransformedMsg;
+    bool unpackSucceeded = true;
     if (consumer->d_transformers.size() > 0) {
         if (!consumer->unpackTransformations(untransformedMsg, message)) {
             BALL_LOG_ERROR << "Failed to undo transformations to message "
                            << message.guid();
-            return;
+            untransformedMsg = message;
+            unpackSucceeded  = false;
         }
     }
     const rmqt::Message& realMsg =
@@ -257,11 +289,16 @@ void ConsumerImpl::threadPoolHandleMessage(
         consumer->d_guardFactory->create(
             realMsg, envelope, consumer->d_messageGuardCb, consumer.ptr()));
 
-    BALL_LOG_DEBUG << "Delivering: " << *guard << " to client";
+    if (unpackSucceeded) {
+        BALL_LOG_DEBUG << "Delivering: " << *guard << " to client";
 
-    (*consumer->d_onMessage)(*guard);
+        (*consumer->d_onMessage)(*guard);
 
-    BALL_LOG_DEBUG << "Processed: " << *guard << " from client";
+        BALL_LOG_DEBUG << "Processed: " << *guard << " from client";
+    }
+    else {
+        guard->nack(false);
+    }
 }
 
 void ConsumerImpl::messageGuardCb(
