@@ -30,6 +30,7 @@
 #include <ball_log.h>
 
 #include <bdlf_bind.h>
+#include <bsl_exception.h>
 #include <bsl_memory.h>
 #include <bsl_string.h>
 #include <bsl_unordered_map.h>
@@ -286,19 +287,30 @@ void ConsumerImpl::threadPoolHandleMessage(
     using bdlf::PlaceHolders::_1;
 
     bslma::ManagedPtr<rmqa::MessageGuard> guard(
-        consumer->d_guardFactory->create(
-            realMsg, envelope, consumer->d_messageGuardCb, consumer.ptr()));
+        consumer->d_guardFactory->create(realMsg,
+                                         envelope,
+                                         consumer->d_messageGuardCb,
+                                         consumer.ptr(),
+                                         unpackSucceeded));
 
-    if (unpackSucceeded) {
-        BALL_LOG_DEBUG << "Delivering: " << *guard << " to client";
+    BALL_LOG_DEBUG << "Delivering: " << *guard << " to client";
 
+    try {
         (*consumer->d_onMessage)(*guard);
+    }
+    catch (bsl::exception& e) {
+        BALL_LOG_ERROR
+            << "Unhandled exception while handling message. Message guid: "
+            << message.guid() << ", payload size: " << message.payloadSize()
+            << "Exception " << e.what();
+    }
+    catch (...) {
+        BALL_LOG_ERROR
+            << "Unhandled exception while handling message. Message guid: "
+            << message.guid() << ", payload size: " << message.payloadSize();
+    }
 
-        BALL_LOG_DEBUG << "Processed: " << *guard << " from client";
-    }
-    else {
-        guard->nack(false);
-    }
+    BALL_LOG_DEBUG << "Processed: " << *guard << " from client";
 }
 
 void ConsumerImpl::messageGuardCb(

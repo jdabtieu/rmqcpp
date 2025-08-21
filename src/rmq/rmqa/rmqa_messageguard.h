@@ -50,7 +50,8 @@ class MessageGuard : public rmqp::MessageGuard {
         create(const rmqt::Message& message,
                const rmqt::Envelope& envelope,
                const MessageGuardCallback& ackCallback,
-               rmqp::Consumer* consumer) const;
+               rmqp::Consumer* consumer,
+               bool is_transformed_correctly = true) const;
 
         virtual ~Factory();
     };
@@ -60,10 +61,14 @@ class MessageGuard : public rmqp::MessageGuard {
     /// \param envelope Consumed delivery metadata
     /// \param ackCallback Callback called when resolving message
     /// \param consumer Pointer to the Consumer
+    /// \param is_transformed_correctly Indicates if the message was transformed
+    ///        correctly (or not at all). If false, the message will be in a
+    ///        TRANSFORM_ERROR state
     MessageGuard(const rmqt::Message& message,
                  const rmqt::Envelope& envelope,
                  const MessageGuardCallback& ackCallback,
-                 rmqp::Consumer* consumer);
+                 rmqp::Consumer* consumer,
+                 bool is_transformed_correctly);
 
     /// During copying `obj` is invalidated and thereafter cannot be used
     /// to (n)ack.
@@ -74,6 +79,8 @@ class MessageGuard : public rmqp::MessageGuard {
     ~MessageGuard() BSLS_KEYWORD_OVERRIDE;
 
     /// Access the received message
+    /// Can throw an exception if the message inverse transformation
+    /// failed
     const rmqt::Message& message() const BSLS_KEYWORD_OVERRIDE;
 
     /// Access the received message envelope (delivery details)
@@ -108,7 +115,8 @@ class MessageGuard : public rmqp::MessageGuard {
     /// Ready - not resolved yet
     /// Invalid - ownership moved
     /// Resolved - message (n)acked.
-    enum State { READY, TRANSFERRED, RESOLVED };
+    /// Transform Error - message inverse transformation failed
+    enum State { READY, TRANSFERRED, RESOLVED, TRANSFORM_ERROR };
 
     State state() const { return d_state; }
 

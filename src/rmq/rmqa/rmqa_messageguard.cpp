@@ -19,6 +19,7 @@
 
 #include <ball_log.h>
 #include <bsl_exception.h>
+#include <bsl_stdexcept.h>
 
 namespace BloombergLP {
 namespace rmqa {
@@ -30,10 +31,11 @@ bslma::ManagedPtr<rmqa::MessageGuard>
 MessageGuard::Factory::create(const rmqt::Message& message,
                               const rmqt::Envelope& envelope,
                               const MessageGuardCallback& ackCallback,
-                              rmqp::Consumer* consumer) const
+                              rmqp::Consumer* consumer,
+                              bool is_transformed_correctly) const
 {
     return bslma::ManagedPtrUtil::makeManaged<rmqa::MessageGuard>(
-        message, envelope, ackCallback, consumer);
+        message, envelope, ackCallback, consumer, is_transformed_correctly);
 }
 
 MessageGuard::Factory::~Factory() {}
@@ -41,8 +43,9 @@ MessageGuard::Factory::~Factory() {}
 MessageGuard::MessageGuard(const rmqt::Message& message,
                            const rmqt::Envelope& envelope,
                            const MessageGuardCallback& ackCallback,
-                           rmqp::Consumer* consumer)
-: d_state(READY)
+                           rmqp::Consumer* consumer,
+                           bool is_transformed_correctly)
+: d_state(is_transformed_correctly ? READY : TRANSFORM_ERROR)
 , d_message(message)
 , d_envelope(envelope)
 , d_ackCallback(ackCallback)
@@ -75,13 +78,15 @@ MessageGuard& MessageGuard::operator=(const MessageGuard& other)
 
 MessageGuard::~MessageGuard()
 {
-    if (d_state == READY) {
+    if (d_state == READY || d_state == TRANSFORM_ERROR) {
         BALL_LOG_ERROR << "Unacked message, explicitly nacking. Message guid: "
                        << d_message.guid()
                        << ", payload size: " << d_message.payloadSize();
         try {
-            d_ackCallback(
-                rmqt::ConsumerAck(d_envelope, rmqt::ConsumerAck::REQUEUE));
+            d_ackCallback(rmqt::ConsumerAck(d_envelope,
+                                            d_state == READY
+                                                ? rmqt::ConsumerAck::REQUEUE
+                                                : rmqt::ConsumerAck::REJECT));
         }
         catch (bsl::exception& e) {
             BALL_LOG_ERROR
@@ -99,7 +104,13 @@ MessageGuard::~MessageGuard()
     }
 }
 
-const rmqt::Message& MessageGuard::message() const { return d_message; }
+const rmqt::Message& MessageGuard::message() const
+{
+    if (d_state == TRANSFORM_ERROR) {
+        throw bsl::runtime_error("inverse transformation failed");
+    }
+    return d_message;
+}
 const rmqt::Envelope& MessageGuard::envelope() const { return d_envelope; }
 rmqp::Consumer* MessageGuard::consumer() const { return d_consumer; }
 

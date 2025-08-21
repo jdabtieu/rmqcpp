@@ -18,6 +18,7 @@
 #include <rmqa_compressiontransformerimpl.h>
 
 #include <rmqp_messagetransformer.h>
+#include <rmqt_fieldvalue.h>
 #include <rmqt_properties.h>
 #include <rmqt_result.h>
 
@@ -36,7 +37,30 @@ namespace rmqa {
 
 namespace {
 BALL_LOG_SET_CLASS_CATEGORY("RMQA.COMPRESSIONTRANSFORMERIMPL");
+
+int64_t compressionSizeAccessor(const rmqt::FieldValue& value)
+{
+    if (value.is<int64_t>()) {
+        return value.the<int64_t>();
+    }
+    if (value.is<uint64_t>()) {
+        return value.the<uint64_t>();
+    }
+    if (value.is<int32_t>()) {
+        return value.the<int32_t>();
+    }
+    if (value.is<uint32_t>()) {
+        return value.the<uint32_t>();
+    }
+    if (value.is<int16_t>()) {
+        return value.the<int16_t>();
+    }
+    if (value.is<uint16_t>()) {
+        return value.the<uint16_t>();
+    }
+    return -1;
 }
+} // namespace
 
 CompressionTransformerImpl::CompressionTransformerImpl()
 : zctx(ZSTD_createCCtx())
@@ -126,8 +150,12 @@ rmqt::Result<> CompressionTransformerImpl::inverseTransform(
     rmqt::Properties& props)
 {
     BSLS_ASSERT(props.headers);
-    int64_t originalSize =
-        (*props.headers)["sdk.transform.compression.size"].the<int64_t>();
+    BSLS_ASSERT(props.headers->contains("sdk.transform.compression.alg"));
+    BSLS_ASSERT(props.headers->contains("sdk.transform.compression.size"));
+
+    int64_t originalSize = compressionSizeAccessor(
+        (*props.headers)["sdk.transform.compression.size"]);
+
     if (originalSize <= 0) {
         BALL_LOG_ERROR << "Invalid original size for decompression: "
                        << originalSize;

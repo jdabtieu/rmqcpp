@@ -46,13 +46,15 @@ bslma::ManagedPtr<rmqa::MessageGuard>
 TracingMessageGuard::Factory::create(const rmqt::Message& message,
                                      const rmqt::Envelope& envelope,
                                      const MessageGuardCallback& ackCallback,
-                                     rmqp::Consumer* consumer) const
+                                     rmqp::Consumer* consumer,
+                                     bool is_transformed_correctly) const
 {
     return bslma::ManagedPtr<rmqa::MessageGuard>(
         new TracingMessageGuard(message,
                                 envelope,
                                 ackCallback,
                                 consumer,
+                                is_transformed_correctly,
                                 d_queueName,
                                 d_endpoint,
                                 d_contextFactory));
@@ -63,10 +65,15 @@ TracingMessageGuard::TracingMessageGuard(
     const rmqt::Envelope& envelope,
     const MessageGuardCallback& ackCallback,
     rmqp::Consumer* consumer,
+    bool is_transformed_correctly,
     const bsl::string& queueName,
     const bsl::shared_ptr<const rmqt::Endpoint>& endpoint,
     const bsl::shared_ptr<rmqp::ConsumerTracing>& contextFactory)
-: rmqa::MessageGuard(message, envelope, ackCallback, consumer)
+: rmqa::MessageGuard(message,
+                     envelope,
+                     ackCallback,
+                     consumer,
+                     is_transformed_correctly)
 , d_context(contextFactory->create(*this, queueName, bsl::ref(endpoint)))
 {
 }

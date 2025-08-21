@@ -51,11 +51,12 @@ class TracingMessageGuard : public rmqa::MessageGuard {
                 const bsl::shared_ptr<const rmqt::Endpoint>& endpoint,
                 const bsl::shared_ptr<rmqp::ConsumerTracing>& contextFactory);
 
-        virtual bslma::ManagedPtr<rmqa::MessageGuard>
-        create(const rmqt::Message& message,
-               const rmqt::Envelope& envelope,
-               const MessageGuardCallback& ackCallback,
-               rmqp::Consumer* consumer) const BSLS_KEYWORD_OVERRIDE;
+        virtual bslma::ManagedPtr<rmqa::MessageGuard> create(
+            const rmqt::Message& message,
+            const rmqt::Envelope& envelope,
+            const MessageGuardCallback& ackCallback,
+            rmqp::Consumer* consumer,
+            bool is_transformed_correctly = true) const BSLS_KEYWORD_OVERRIDE;
 
       private:
         bsl::string d_queueName;
@@ -75,11 +76,15 @@ class TracingMessageGuard : public rmqa::MessageGuard {
     /// \param envelope Consumed delivery metadata
     /// \param ackCallback Callback called when resolving message
     /// \param consumer Pointer to the Consumer
+    /// \param is_transformed_correctly Indicates if the message was transformed
+    ///        correctly (or not at all). If false, the message will be in a
+    ///        TRANSFORM_ERROR state
     TracingMessageGuard(
         const rmqt::Message& message,
         const rmqt::Envelope& envelope,
         const MessageGuardCallback& ackCallback,
         rmqp::Consumer* consumer,
+        bool is_transformed_correctly,
         const bsl::string& queueName,
         const bsl::shared_ptr<const rmqt::Endpoint>& endpoint,
         const bsl::shared_ptr<rmqp::ConsumerTracing>& contextFactory);

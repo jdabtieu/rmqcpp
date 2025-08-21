@@ -68,7 +68,8 @@ TEST_F(MessageGuardTest, Construct)
         rmqt::Message(),
         rmqt::Envelope(0, 0, "consumerTag", "exchange", "routing-key", false),
         callback(),
-        &d_consumer);
+        &d_consumer,
+        true);
 }
 
 TEST_F(MessageGuardTest, ackCallsCallback)
@@ -77,7 +78,8 @@ TEST_F(MessageGuardTest, ackCallsCallback)
         rmqt::Message(),
         rmqt::Envelope(0, 0, "consumerTag", "exchange", "routing-key", false),
         callback(),
-        &d_consumer);
+        &d_consumer,
+        true);
     mg.ack();
     EXPECT_TRUE(d_acked);
     EXPECT_EQ(d_ack_state, rmqt::ConsumerAck::ACK);
@@ -89,7 +91,8 @@ TEST_F(MessageGuardTest, nackRequeueCallsCallback)
         rmqt::Message(),
         rmqt::Envelope(0, 0, "consumerTag", "exchange", "routing-key", false),
         callback(),
-        &d_consumer);
+        &d_consumer,
+        true);
     mg.nack();
     EXPECT_TRUE(d_acked);
     EXPECT_EQ(d_ack_state, rmqt::ConsumerAck::REQUEUE);
@@ -101,7 +104,8 @@ TEST_F(MessageGuardTest, nackRejectCallsCallback)
         rmqt::Message(),
         rmqt::Envelope(0, 0, "consumerTag", "exchange", "routing-key", false),
         callback(),
-        &d_consumer);
+        &d_consumer,
+        true);
     mg.nack(false);
     EXPECT_TRUE(d_acked);
     EXPECT_EQ(d_ack_state, rmqt::ConsumerAck::REJECT);
@@ -113,7 +117,8 @@ TEST_F(MessageGuardTest, onlyFirstAckApplies)
         rmqt::Message(),
         rmqt::Envelope(0, 0, "consumerTag", "exchange", "routing-key", false),
         callback(),
-        &d_consumer);
+        &d_consumer,
+        true);
     mg.ack();
     mg.ack();
     mg.nack(false);
@@ -128,7 +133,8 @@ TEST_F(MessageGuardTest, onlyFirstNackApplies)
         rmqt::Message(),
         rmqt::Envelope(0, 0, "consumerTag", "exchange", "routing-key", false),
         callback(),
-        &d_consumer);
+        &d_consumer,
+        true);
     mg.nack(true);
     mg.ack();
     mg.ack();
@@ -145,7 +151,8 @@ TEST_F(MessageGuardTest, destructorCallsNack)
             rmqt::Envelope(
                 0, 0, "consumerTag", "exchange", "routing-key", false),
             callback(),
-            &d_consumer);
+            &d_consumer,
+            true);
     }
     EXPECT_TRUE(d_acked);
     EXPECT_EQ(d_ack_state, rmqt::ConsumerAck::REQUEUE);
@@ -159,7 +166,8 @@ TEST_F(MessageGuardTest, copyingInvalidatesOriginalAndNoNackCalled)
             rmqt::Envelope(
                 0, 0, "consumerTag", "exchange", "routing-key", false),
             callback(),
-            &d_consumer);
+            &d_consumer,
+            true);
         {
             rmqa::MessageGuard mg2 = mg;
             mg.ack();
@@ -179,7 +187,8 @@ TEST_F(MessageGuardTest, copiedObjectIsvalidAndCanAck)
             rmqt::Envelope(
                 0, 0, "consumerTag", "exchange", "routing-key", false),
             callback(),
-            &d_consumer);
+            &d_consumer,
+            true);
         {
             rmqa::MessageGuard mg2 = mg;
             mg.ack();
@@ -198,7 +207,8 @@ TEST_F(MessageGuardTest, ConsumerPassThrough)
         rmqt::Message(),
         rmqt::Envelope(0, 0, "consumerTag", "exchange", "routing-key", false),
         callback(),
-        &d_consumer);
+        &d_consumer,
+        true);
     EXPECT_THAT(&d_consumer, Eq(mg.consumer()));
 }
 
@@ -211,7 +221,8 @@ TEST_F(MessageGuardTest, TransferOwnership)
             rmqt::Envelope(
                 0, 0, "consumerTag", "exchange", "routing-key", false),
             callback(),
-            &d_consumer);
+            &d_consumer,
+            true);
         tmg = mg.transferOwnership();
         EXPECT_TRUE(tmg);
         mg.ack();
@@ -231,7 +242,8 @@ TEST_F(MessageGuardTest, TransferOwnershipOfAckedMG)
             rmqt::Envelope(
                 0, 0, "consumerTag", "exchange", "routing-key", false),
             callback(),
-            &d_consumer);
+            &d_consumer,
+            true);
         mg.ack();
         EXPECT_TRUE(d_acked);
         EXPECT_EQ(d_ack_state, rmqt::ConsumerAck::ACK);
